@@ -421,6 +421,12 @@ dev.off()
 # Identify marker genes for each cell type
 Cg_cell_markers <- FindAllMarkers(seob, only.pos = TRUE, group.by = "cell_type", min.pct = 0.10, logfc.threshold = 0.25, assay = "SCT")
 write.csv(Cg_cell_markers, file = "data/Cgigas/mantle/Cg_cell_markers.csv", row.names = FALSE)
-
 save(Cg_cell_markers, file = "data/Cgigas/mantle/Cg_cell_markers.rdata")
+
+# Compute average expression per cell type
+Cg_average <- AverageExpression(seob, group.by = "cell_type")$SCT
+Cg_average <- rownames_to_column(as.data.frame(Cg_average), "GeneID")
+save(Cg_average, file = "data/Cgigas/mantle/Cg_average.rdata")
+
+# Save the Seurat object
 save(seob, file = "data/Cgigas/mantle/OysterMantle.scRNAseq.rdata")
