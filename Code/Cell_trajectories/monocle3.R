@@ -4,7 +4,7 @@ library(monocle3)
 library(ggplot2)
 
 # Load Seurat object and subset unknown cell types
-load(file = "data/Cgigas/mantle/OysterMantle.scRNAseq.rdata")
+load(file = "OysterMantle.scRNAseq.rdata")
 seob <- subset(seob, subset = cell_type != "Unknown")
 cds <- as.cell_data_set(seob,
                         assay = "SCT",
