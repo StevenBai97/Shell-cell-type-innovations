@@ -52,7 +52,7 @@ from samalg import SAM
 from samap.utils import save_samap, load_samap
 import pickle
 import pandas as pd
-outname = 'samap_oysterSEC.worm'
+outname = 'samap_oysterSEC.Pgo'
 filenames = {'Cg': 'oyster.SEC.samap.h5ad', 'Pg': 'Pgo.samap.h5ad'}
 sm = SAMAP(filenames, f_maps = 'maps/', save_processed = True)
 save_samap(sm, outname + '.pkl')
