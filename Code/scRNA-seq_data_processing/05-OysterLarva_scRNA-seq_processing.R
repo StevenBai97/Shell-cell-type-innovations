@@ -14,7 +14,7 @@ options(future.globals.maxSize = 50 * 1024^3)
 # Initialize list to store Seurat objects per sample
 seob_list <- list()
 
-# Get sample names (directory names under data/Cgigas/mantle)
+# Get sample names (directory names under data/Cgigas/larva)
 samples = basename(list.dirs("data/Cgigas/larva", recursive = F))
 
 # Loop through samples and create individual Seurat objects
