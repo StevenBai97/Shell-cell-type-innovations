@@ -71,7 +71,7 @@ cor_df_pearson <- cor_df %>%
   )
 
 # Plot Pearson correlation heatmap
-pearson <- ggplot(cor_df_pearson, aes(x = larva_celltype, y = mantle_celltype, fill = correlation)) +
+p_pearson <- ggplot(cor_df_pearson, aes(x = larva_celltype, y = mantle_celltype, fill = correlation)) +
   geom_tile(color = "grey", size = 0.25) +
   scale_fill_gradient2(
     low = "white", high = "#d73027",
@@ -95,7 +95,7 @@ pearson <- ggplot(cor_df_pearson, aes(x = larva_celltype, y = mantle_celltype, f
   coord_fixed()
 
 # Save figure and matrix results
-ggsave(filename = "Cgi.larva_mantle.pearson.pdf", plot = pearson, width = 8, height = 6)
+ggsave(filename = "Cgi.larva_mantle.pearson.pdf", plot = p_pearson, width = 8, height = 6)
 write.csv(cor_df_pearson, "Cgi.larva_mantle.pearson.csv", row.names = FALSE)
 write.csv(cor_matrix, file = "Cgi.larva_mantle.pearson.csv", quote = FALSE)
 
@@ -121,7 +121,7 @@ cor_df_spearman <- as_tibble(cor_matrix_spearman, rownames = "mantle_celltype") 
   )
 
 # Plot Spearman correlation heatmap
-spearman <- ggplot(cor_df_spearman, aes(x = larva_celltype, y = mantle_celltype, fill = correlation)) +
+p_spearman <- ggplot(cor_df_spearman, aes(x = larva_celltype, y = mantle_celltype, fill = correlation)) +
   geom_tile(color = "grey", size = 0.25) +
   scale_fill_gradient(low = "white", high = "#327bb1", limits = c(0.3, 0.8), name = "Spearman\nCorrelation") +
   theme_minimal() +
@@ -140,7 +140,7 @@ spearman <- ggplot(cor_df_spearman, aes(x = larva_celltype, y = mantle_celltype,
        y = "Mantle Cell Types",
        fill = "Spearman\nCorrelation") +
   coord_fixed()
-ggsave(filename = "Cgi.larva_mantle.spearman.pdf", plot = spearman, width = 8, height = 6)
+ggsave(filename = "Cgi.larva_mantle.spearman.pdf", plot = p_spearman, width = 8, height = 6)
 
 # Jensen–Shannon divergence (JSD)
 # Convert expression matrix to probability distributions (column normalized)
@@ -206,8 +206,7 @@ larva_marker_sets <- larva_markers %>%
   group_by(cluster) %>%
   summarise(genes = list(gene), .groups = 'drop')
 
-                         
-# 计算 Jaccard 相似度
+# Define Jaccard similarity function
 jaccard <- function(set1, set2) {
   if (length(set1) == 0 | length(set2) == 0) return(0)
   inter <- length(intersect(set1, set2))
@@ -215,7 +214,7 @@ jaccard <- function(set1, set2) {
   return(inter / union)
 }
 
-# 构建相似性矩阵
+# Build Jaccard similarity matrix
 ct_mantle <- mantle_marker_sets$cluster
 ct_larva  <- larva_marker_sets$cluster
 
@@ -231,13 +230,15 @@ for (i in seq_along(ct_mantle)) {
   }
 }
 
+# Plot Jaccard index heatmap
 jaccard_df <- as_tibble(jaccard_matrix, rownames = "mantle_celltype") %>%
   pivot_longer(cols = -mantle_celltype, names_to = "larva_celltype", values_to = "jaccard_index")
 
 jaccard_df$mantle_celltype <- factor(jaccard_df$mantle_celltype, levels = mantle_order)
 jaccard_df$larva_celltype <- factor(jaccard_df$larva_celltype, levels = larva_order)
 
-p <- ggplot(jaccard_df, aes(x = larva_celltype, y = mantle_celltype, fill = jaccard_index)) +
+# Plot jaccard heatmap
+p_jaccard <- ggplot(jaccard_df, aes(x = larva_celltype, y = mantle_celltype, fill = jaccard_index)) +
   geom_tile(color = "grey", size = 0.25) +
   scale_fill_gradient(low = "white", high = "#db4003", limits = c(0, 0.25), name = "Jaccard\nIndex") +
   theme_minimal() +
@@ -256,11 +257,10 @@ p <- ggplot(jaccard_df, aes(x = larva_celltype, y = mantle_celltype, fill = jacc
        y = "Mantle Cell Types",
        fill = "Jaccard\nIndex") +
   coord_fixed()
+ggsave(filename = "Cgi.larva_mantle.jaccard.pdf", plot = p_jaccard, width = 8, height = 6)
 
-# 保存图像
-ggsave(filename = "Cgi.larva_mantle.jaccard.pdf", plot = p, width = 8, height = 6)
-
-# 优化后的超几何检验函数
+# Hypergeometric test for marker overlap
+# Define optimized hypergeometric test function
 test_overlap <- function(genes_A, genes_B, background_genes) {
   overlap <- length(intersect(genes_A, genes_B))
   m <- length(genes_A)
@@ -276,10 +276,10 @@ test_overlap <- function(genes_A, genes_B, background_genes) {
   return(list(overlap = overlap, p_val = p_val, or = or))
 }
 
-# 使用表达过的基因作为背景（更合理）
+# Use all expressed genes as background
 background_genes <- union(mantle_markers$gene, larva_markers$gene)
 
-# 提取 cluster marker sets（只用上调基因）
+# Extract upregulated marker genes per cluster
 mantle_marker_sets <- mantle_markers %>%
   filter(avg_log2FC > 0) %>%
   group_by(cluster) %>%
@@ -293,14 +293,14 @@ larva_marker_sets <- larva_markers %>%
 ct_mantle <- mantle_marker_sets$cluster
 ct_larva <- larva_marker_sets$cluster
 
-# 初始化矩阵存储原始 P 值、adjusted P 值、overlap
+# Initialize matrices for p-values and overlaps
 p_list <- c()
 p_matrix <- matrix(NA, nrow = length(ct_mantle), ncol = length(ct_larva),
                    dimnames = list(ct_mantle, ct_larva))
 overlap_matrix <- matrix(NA, nrow = length(ct_mantle), ncol = length(ct_larva),
                          dimnames = list(ct_mantle, ct_larva))
 
-# 计算超几何检验 P 值
+# Perform hypergeometric tests for all cell type pairs
 for (i in seq_along(ct_mantle)) {
   genes_A <- unlist(mantle_marker_sets$genes[i])
   for (j in seq_along(ct_larva)) {
@@ -312,24 +312,24 @@ for (i in seq_along(ct_mantle)) {
   }
 }
 
-# 多重比较校正（BH 方法）
+# Multiple testing correction using Benjamini-Hochberg (BH) method
 p_adj_list <- p.adjust(p_list, method = "BH")
 
-# 转为矩阵形式（与原始 p_matrix 相同维度）
+# Convert the adjusted p-values back into a matrix (same dimensions as p_matrix)
 p_adj_matrix <- matrix(p_adj_list, nrow = length(ct_mantle), ncol = length(ct_larva),
                        dimnames = list(ct_mantle, ct_larva), byrow = TRUE)
 
-# -log10 转换，保留 Inf（不替换掉）
+# Convert adjusted p-values to -log10 scale (retain Inf values)
 logp_matrix <- -log10(p_adj_matrix)
 
-# 绘图 cap 值
+# Cap maximum -log10 values for visualization
 cap_value <- 20
 logp_matrix_capped <- pmin(logp_matrix, cap_value)
 
-# 显著性阈值（默认 p < 0.01）
+# Define significance threshold (default: p < 0.01)
 sig_threshold <- -log10(0.01)
 
-# 转为数据框（绘图用）
+# Convert matrix to long-format dataframe for ggplot2 visualization
 logp_df <- as_tibble(logp_matrix_capped, rownames = "mantle_celltype") %>%
   pivot_longer(-mantle_celltype, names_to = "larva_celltype", values_to = "log10_adj_pvalue") %>%
   mutate(
@@ -337,7 +337,7 @@ logp_df <- as_tibble(logp_matrix_capped, rownames = "mantle_celltype") %>%
     larva_celltype = factor(larva_celltype, levels = larva_order)
   )
 
-# 热图绘制
+# Plot heatmap of adjusted hypergeometric test results
 p <- ggplot(logp_df, aes(x = larva_celltype, y = mantle_celltype, fill = log10_adj_pvalue)) +
   geom_tile(color = "grey", size = 0.25) +
   scale_fill_gradient(low = "white", high = "#e71f19", name = expression(-log[10]~adjusted~p)) +
@@ -363,10 +363,9 @@ p <- ggplot(logp_df, aes(x = larva_celltype, y = mantle_celltype, fill = log10_a
        y = "Mantle Cell Types",
        fill = expression(-log[10](adjusted~p))) +
   coord_fixed()
-
 ggsave("mantle_vs_larva_hypergeom_adjusted_logp.pdf", p, width = 8, height = 6)
 
-# 输出矩阵
+# Export raw and adjusted p-value matrices and overlap counts
 write.csv(p_matrix, file = "mantle_vs_larva_raw_pvalue_matrix.csv", quote = FALSE)
 write.csv(p_adj_matrix, file = "mantle_vs_larva_adjusted_pvalue_matrix.csv", quote = FALSE)
 write.csv(overlap_matrix, file = "mantle_vs_larva_overlap_matrix.csv", quote = FALSE)
