@@ -5,7 +5,6 @@ library(Seurat)
 library(patchwork)
 library(ggplot2)
 library(DoubletFinder)
-library(shadowtext)
 
 # Increase memory limit for parallelization
 options(future.globals.maxSize = 50 * 1024^3)
