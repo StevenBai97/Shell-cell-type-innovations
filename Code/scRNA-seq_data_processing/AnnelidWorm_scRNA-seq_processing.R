@@ -81,8 +81,8 @@ seob <- seob_filter2
 seob_sct_noregress <- SCTransform(seob)
 
 # Read S phase and G2M phase gene IDs from file
-s_genes.Cgi <- readLines("s_genes.Ple")
-g2m_genes.Cgi <- readLines("g2m_genes.Ple")
+s_genes.Ple <- readLines("s_genes.Ple")
+g2m_genes.Ple <- readLines("g2m_genes.Ple")
 
 # Assign cell cycle scores based on S and G2/M orthologs
 seob_sct_noregress <- CellCycleScoring(
