@@ -89,7 +89,7 @@ seob <- seob_filter2
 # SCTransform normalization (no regression at this stage)
 seob_sct_noregress <- SCTransform(seob)
 
-## Read S phase and G2M phase gene IDs from file
+# Read S phase and G2M phase gene IDs from file
 s_genes.Cgi <- readLines("s_genes.Cgi.geneid")
 g2m_genes.Cgi <- readLines("g2m_genes.Cgi.geneid")
 
