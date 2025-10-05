@@ -236,7 +236,7 @@ ordered_genes <- c(
 marker_data <- DotPlot(seob, 
                    assay = "SCT", 
                    features = ordered_genes,
-                   group.by = "cell_type")$data
+                   group.by = "seurat_clusters")$data
 marker_data <- marker_data[marker_data$pct.exp > 0, ]
 
 # Replace gene IDs with preferred names for plotting
