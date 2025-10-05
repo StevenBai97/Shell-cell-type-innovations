@@ -87,8 +87,8 @@ g2m_genes.Ple <- readLines("g2m_genes.Ple")
 # Assign cell cycle scores based on S and G2/M orthologs
 seob_sct_noregress <- CellCycleScoring(
   seob_sct_noregress,
-  s.features = s_genes.Cgi,
-  g2m.features = g2m_genes.Cgi
+  s.features = s_genes.Ple,
+  g2m.features = g2m_genes.Ple
 )
 
 # Re-run SCTransform, regressing out cell cycle effects (S and G2M scores)
