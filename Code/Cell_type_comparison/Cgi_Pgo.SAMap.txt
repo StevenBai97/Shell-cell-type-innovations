@@ -1,0 +1,71 @@
+# Map orthologous genes between two species
+map_genes.sh --tr1 Cgi.pep.fasta --t1 prot --n1 Cgi --tr2 Pgo.pep.fasta --t2 prot --n2 Pgo --threads 40
+
+# Python SAMAP
+from samap.mapping import SAMAP
+from samap.analysis import get_mapping_scores, GenePairFinder
+from samalg import SAM
+from samap.utils import save_samap, load_samap
+import pickle
+import pandas as pd
+
+# Output prefix
+outname = 'samap_oyster.Pgo'
+
+# Input h5ad files from previous preprocessing
+filenames = {'Cg': 'oyster.samap.h5ad', 'Pg': 'Pgo.samap.h5ad'}
+
+# Initialize SAMAP object
+sm = SAMAP(filenames, f_maps = 'maps/', save_processed = True)
+
+# Save the raw SAMAP object
+save_samap(sm, outname + '.pkl')
+
+# Run the mapping algorithm
+samap = sm.run()
+
+# Save SAMAP results to pickle
+save_samap(sm, outname + '_sm.pkl')
+with open(outname + '_samap.pkl', 'wb') as fh: pickle.dump(samap, fh)
+
+# Save UMAP coordinates of mapped cells
+umap = pd.DataFrame(sm.samap.adata.obsm['X_umap'], index=list(sm.samap.adata.obs.index))
+umap.to_csv(outname + '_umap.tsv', sep='\t', encoding='utf-8')
+
+# Calculate cell type mapping scores
+keys = {'Cg': 'cell_type', 'Pg': 'cell_type'}
+D, MappingTable = get_mapping_scores(sm, keys)
+MappingTable.to_csv(outname + '_annot.tsv', sep='\t', encoding='utf-8')
+
+# Identify enriched gene pairs contributing to mapping
+gpf = GenePairFinder(sm, keys=keys)
+with open(outname + '_gpf.pkl', 'wb') as fh:
+    pickle.dump(gpf, fh)
+
+gene_pairs = gpf.find_all(thr=0.10)
+gene_pairs.to_csv(outname + '_gene_pairs.tsv', sep='\t', encoding='utf-8')
+
+# Python SAMAP workflow (oyster using merged SEC cell type)
+from samap.mapping import SAMAP
+from samap.analysis import get_mapping_scores, GenePairFinder
+from samalg import SAM
+from samap.utils import save_samap, load_samap
+import pickle
+import pandas as pd
+outname = 'samap_oysterSEC.worm'
+filenames = {'Cg': 'oyster.SEC.samap.h5ad', 'Pg': 'Pgo.samap.h5ad'}
+sm = SAMAP(filenames, f_maps = 'maps/', save_processed = True)
+save_samap(sm, outname + '.pkl')
+samap = sm.run()
+save_samap(sm, outname + '_sm.pkl')
+with open(outname + '_samap.pkl', 'wb') as fh: pickle.dump(samap, fh)
+umap = pd.DataFrame(sm.samap.adata.obsm['X_umap'], index=list(sm.samap.adata.obs.index))
+umap.to_csv(outname + '_umap.tsv', sep='\t', encoding='utf-8')
+keys = {'Cg': 'cell_type_label', 'Pl': 'cell_type'}
+D, MappingTable = get_mapping_scores(sm, keys)
+MappingTable.to_csv(outname + '_annot.tsv', sep='\t', encoding='utf-8')
+gpf = GenePairFinder(sm, keys=keys)
+with open(outname + '_gpf.pkl', 'wb') as fh:
+    pickle.dump(gpf, fh)
+gene_pairs = gpf.find_all(thr=0.10)
+gene_pairs.to_csv(outname + '_gene_pairs.tsv', sep='\t', encoding='utf-8')
