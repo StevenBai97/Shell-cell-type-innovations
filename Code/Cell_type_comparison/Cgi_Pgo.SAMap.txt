@@ -61,7 +61,7 @@ save_samap(sm, outname + '_sm.pkl')
 with open(outname + '_samap.pkl', 'wb') as fh: pickle.dump(samap, fh)
 umap = pd.DataFrame(sm.samap.adata.obsm['X_umap'], index=list(sm.samap.adata.obs.index))
 umap.to_csv(outname + '_umap.tsv', sep='\t', encoding='utf-8')
-keys = {'Cg': 'cell_type_label', 'Pl': 'cell_type'}
+keys = {'Cg': 'cell_type_label', 'Pg': 'cell_type'}
 D, MappingTable = get_mapping_scores(sm, keys)
 MappingTable.to_csv(outname + '_annot.tsv', sep='\t', encoding='utf-8')
 gpf = GenePairFinder(sm, keys=keys)
