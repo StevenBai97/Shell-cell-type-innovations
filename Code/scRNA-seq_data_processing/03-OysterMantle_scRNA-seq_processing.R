@@ -112,11 +112,11 @@ seob <- RunUMAP(seob, assay = "SCT", dims = 1:30)
 
 # PCA and UMAP plots grouped by sample
 p_pca <- DimPlot(seob,
-                 reduction = "pca", # pca, umap,
+                 reduction = "pca",
                  group.by = "samples",
                  label = F)
 p_umap <- DimPlot(seob,
-                  reduction = "umap", # pca, umap,
+                  reduction = "umap",
                   group.by = "samples",
                   label = F)
 pdf("data/Cgigas/mantle/Cgi_PCA_UMAP.pdf", width = 12, height = 6)
