@@ -78,8 +78,8 @@ pkgbuild::build('.//org.My.eg.db', dest_path = ".")
 # install package  
 dir.create('R_Library', recursive = T)
 install.packages('org.My.eg.db_1.0.tar.gz',
-                 repos = NULL, #从本地安装
-                 lib = 'R_Library') # 安装文件夹
+                 repos = NULL,
+                 lib = 'R_Library')
 library(org.My.eg.db, lib = 'R_Library')
 
 ###############################################
