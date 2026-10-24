@@ -4,7 +4,7 @@
 
 This repository contains the original analysis code associated with the research article:
 
-Ancestral secretory programs underlie the evolution of morphological innovations across Spiralia
+**Ancestral secretory programs underlie the evolution of morphological innovations across Spiralia**
 
 This study integrates single-cell transcriptomics, comparative genomics, phylostratigraphy, and cross-species cell-type comparisons to investigate the evolutionary origins and molecular diversification of shell-forming cells in molluscs.
 
