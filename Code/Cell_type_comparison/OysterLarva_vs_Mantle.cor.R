@@ -45,18 +45,17 @@ for (i in ct_mantle) {
 mantle_order <- rev(c(
   "Shell-secreting epithelial cells1", "Shell-secreting epithelial cells2",
   "Shell-secreting epithelial cells3", "Shell-secreting epithelial cells4",
-  "Shell-secreting epithelial cells5", "Proliferative cells",
+  "Shell-secreting epithelial cells5", "Shell-secreting epithelial cells6",
+  "Proliferative cells",
   "Neurons", "Hemocytes (blast-like cells)", "Hemocytes (hyalinocytes)",
   "Hemocytes (small granule cells)", "Hemocytes (vesicular cells)",
-  "Myocytes", "Myocytes + Hemocytes", "Cilia",
-  "Cilia + Hemocytes", "Unknown", "Vesicular connective tissue cells"
+  "Myocytes", "Cilia", "Vesicular connective tissue cells","Unknown"
 ))
 
 larva_order <- c(
   "Shell gland1", "Shell gland2", "Shell gland3", "Shell gland4",
-  "Proliferative cells", "Proliferative cells + Myocytes", "Neurons",
-  "Neurons + Myocytes", "Hemocytes", "Hemocytes + Myocytes",
-  "Myocytes", "Cilia", "Cilia + Myocytes", "Unknown"
+  "Proliferative cells", "Neurons",
+  "Hemocytes", "Myocytes", "Cilia", "Unknown"
 )
 
 # Reshape correlation matrix into long format for ggplot
@@ -260,45 +259,58 @@ p_jaccard <- ggplot(jaccard_df, aes(x = larva_celltype, y = mantle_celltype, fil
 ggsave(filename = "Cgi.larva_mantle.jaccard.pdf", plot = p_jaccard, width = 8, height = 6)
 
 # Hypergeometric test for marker overlap
-# Define optimized hypergeometric test function
-test_overlap <- function(genes_A, genes_B, background_genes) {
-  overlap <- length(intersect(genes_A, genes_B))
-  m <- length(genes_A)
-  n <- length(genes_B)
-  N <- length(background_genes)
-  if (overlap == 0) {
-    p_val <- 1
-    or <- NA
-  } else {
-    p_val <- phyper(overlap - 1, m, N - m, n, lower.tail = FALSE)
-    or <- (overlap / n) / ((m - overlap) / (N - n))
-  }
-  return(list(overlap = overlap, p_val = p_val, or = or))
-}
-
-# Use all expressed genes as background
+# Background genes
 background_genes <- union(mantle_markers$gene, larva_markers$gene)
 
-# Extract upregulated marker genes per cluster
+# Marker gene set
 mantle_marker_sets <- mantle_markers %>%
   filter(avg_log2FC > 0) %>%
   group_by(cluster) %>%
-  summarise(genes = list(gene), .groups = "drop")
+  summarise(genes = list(unique(gene)), .groups = "drop")
 
 larva_marker_sets <- larva_markers %>%
   filter(avg_log2FC > 0) %>%
   group_by(cluster) %>%
-  summarise(genes = list(gene), .groups = "drop")
+  summarise(genes = list(unique(gene)), .groups = "drop")
 
 ct_mantle <- mantle_marker_sets$cluster
 ct_larva <- larva_marker_sets$cluster
 
+# Remove unknown cells
+mantle_order <- setdiff(mantle_order, c("Unknown", "unknown"))
+larva_order  <- setdiff(larva_order,  c("Unknown", "unknown"))
+
+# Overlap testing
+test_overlap <- function(genes_A, genes_B, background_genes) {
+  genes_A <- intersect(genes_A, background_genes)
+  genes_B <- intersect(genes_B, background_genes)
+  overlap <- length(intersect(genes_A, genes_B))
+  m <- length(genes_A)
+  n <- length(genes_B)
+  N <- length(background_genes)
+  mat <- matrix(c(
+    overlap,
+    m - overlap,
+    n - overlap,
+    N - m - n + overlap
+  ), nrow = 2)
+  ft <- fisher.test(mat, alternative = "greater")
+  return(list(
+    overlap = overlap,
+    p_val = ft$p.value,
+    or = unname(ft$estimate)
+  ))
+}
+
 # Initialize matrices for p-values and overlaps
-p_list <- c()
 p_matrix <- matrix(NA, nrow = length(ct_mantle), ncol = length(ct_larva),
                    dimnames = list(ct_mantle, ct_larva))
+
 overlap_matrix <- matrix(NA, nrow = length(ct_mantle), ncol = length(ct_larva),
                          dimnames = list(ct_mantle, ct_larva))
+
+or_matrix <- matrix(NA, nrow = length(ct_mantle), ncol = length(ct_larva),
+                    dimnames = list(ct_mantle, ct_larva))
 
 # Perform hypergeometric tests for all cell type pairs
 for (i in seq_along(ct_mantle)) {
@@ -308,22 +320,25 @@ for (i in seq_along(ct_mantle)) {
     res <- test_overlap(genes_A, genes_B, background_genes)
     p_matrix[i, j] <- res$p_val
     overlap_matrix[i, j] <- res$overlap
-    p_list <- c(p_list, res$p_val)
+    or_matrix[i, j] <- res$or
   }
 }
 
 # Multiple testing correction using Benjamini-Hochberg (BH) method
 p_adj_list <- p.adjust(p_list, method = "BH")
 
-# Convert the adjusted p-values back into a matrix (same dimensions as p_matrix)
-p_adj_matrix <- matrix(p_adj_list, nrow = length(ct_mantle), ncol = length(ct_larva),
-                       dimnames = list(ct_mantle, ct_larva), byrow = TRUE)
+# Multiple testing correction using Benjamini-Hochberg (BH) method and convert the adjusted p-values back into a matrix (same dimensions as p_matrix)
+p_adj_matrix <- matrix(
+  p.adjust(as.vector(p_matrix), method = "BH"),
+  nrow = nrow(p_matrix),
+  dimnames = dimnames(p_matrix)
+)
 
 # Convert adjusted p-values to -log10 scale (retain Inf values)
 logp_matrix <- -log10(p_adj_matrix)
 
 # Cap maximum -log10 values for visualization
-cap_value <- 20
+cap_value <- 10
 logp_matrix_capped <- pmin(logp_matrix, cap_value)
 
 # Define significance threshold (default: p < 0.01)
@@ -340,10 +355,11 @@ logp_df <- as_tibble(logp_matrix_capped, rownames = "mantle_celltype") %>%
 # Plot heatmap of adjusted hypergeometric test results
 p <- ggplot(logp_df, aes(x = larva_celltype, y = mantle_celltype, fill = log10_adj_pvalue)) +
   geom_tile(color = "grey", size = 0.25) +
-  scale_fill_gradient(low = "white", high = "#e71f19", name = expression(-log[10]~adjusted~p)) +
+  scale_fill_gradient(low = "white", high = "#e71f19",
+                      name = expression(-log[10]~adjusted~p)) +
   geom_text(
     data = logp_df %>% filter(log10_adj_pvalue > sig_threshold),
-    aes(label = "**"),
+    aes(label = "*"),
     color = "black",
     size = 3
   ) +
@@ -351,17 +367,13 @@ p <- ggplot(logp_df, aes(x = larva_celltype, y = mantle_celltype, fill = log10_a
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, size = 9, color = "black"),
     axis.text.y = element_text(size = 9, color = "black"),
-    axis.title.x = element_text(color = "black"),
-    axis.title.y = element_text(color = "black"),
-    legend.title = element_text(size = 10, color = "black"),
-    legend.text = element_text(size = 9, color = "black"),
-    panel.grid = element_blank(),
-    plot.title = element_text(color = "black", size = 12, face = "bold")
+    panel.grid = element_blank()
   ) +
-  labs(title = "Adjusted Hypergeometric Overlap Significance",
-       x = "Larval Cell Types",
-       y = "Mantle Cell Types",
-       fill = expression(-log[10](adjusted~p))) +
+  labs(
+    title = "Marker Gene Overlap Enrichment",
+    x = "Larval Cell Types",
+    y = "Mantle Cell Types"
+  ) +
   coord_fixed()
 ggsave("mantle_vs_larva_hypergeom_adjusted_logp.pdf", p, width = 8, height = 6)
 
