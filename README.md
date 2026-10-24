@@ -1,6 +1,6 @@
-Shell Cell Type Innovations
+# Shell Cell Type Innovations
 
-Overview
+## Overview
 
 This repository contains the original analysis code associated with the research article:
 
@@ -10,7 +10,7 @@ This study integrates single-cell transcriptomics, comparative genomics, phylost
 
 Using oyster shell-secreting epithelial cells as a model, we explore how ancestral epithelial-secretory functions, lineage-specific genes, and gene duplications contribute to the evolution of specialized biomineralizing cell types.
 
-Code and Reproducibility
+## Code and Reproducibility
 
 The scripts provided in this repository support the computational analyses described in the manuscript.
 
@@ -18,7 +18,7 @@ Some analyses require external datasets, reference genomes, gene annotations, an
 
 For detailed information on datasets, analytical parameters, and software versions, please refer to the Materials and Methods section of the manuscript.
 
-Citation
+## Citation
 
 If you use the code from this repository, please cite:
 
