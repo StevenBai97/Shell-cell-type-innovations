@@ -150,17 +150,7 @@ Cg_phyp_logP <- -log10(
 )
 Cg_phyp_logP[Cg_phyp_logP > 5] <- 5
 
-# Convert to data frame and sort by Phylostratum
-Cg_phyp_mat <- as.data.frame(Cg_phyp_mat)
-Cg_phyp_mat <- Cg_phyp_mat[order(as.numeric(Cg_phyp_mat$Phylostratum)), ]
-
-# Set rownames
-rownames(Cg_phyp_mat) <- Cg_phyp_mat$PS_name
-Cg_phyp_mat$PS_name <- NULL
-Cg_phyp_mat$Phylostratum <- NULL
-
-# Plot pheatmap for phylostratum enrichment (-log10 scale)
-colors <- colorRampPalette(c("#f7f4f9", "#cab2d6", "#6a3d9a"))(100)
+# Plot pheatmap for phylostratum enrichment
 Oyster_larva_pheatmap_celltype <- pheatmap(
   Cg_phyp_logP,
   color = colorRampPalette(c("white", "#6a3d9a"))(100),
