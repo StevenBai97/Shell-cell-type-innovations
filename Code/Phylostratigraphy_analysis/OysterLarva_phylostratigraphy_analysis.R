@@ -232,7 +232,7 @@ dup_gene_node <- dup_gene %>%
 
 # Load scRNA-seq marker and Seurat data
 load("data/Cgigas/larva/Cg_cell_markers.rdata")
-load("data/Cgigas/larva/209.rdata")
+load("data/Cgigas/mantle/OysterLarva.rdata")
 
 # Prefer explicitly using RNA assay features
 detected_genes <- rownames(seob)
