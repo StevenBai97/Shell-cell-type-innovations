@@ -123,31 +123,12 @@ pdf("data/Cgigas/larva/Cgi_PCA_UMAP.pdf", width = 12, height = 6)
 print(p_pca + p_umap)
 dev.off()
 
-# Assign developmental stage labels based on sample identity
-seob$stages <- ifelse(seob$samples == "T", "Trochophore", "Gastrula")
-
-# Integrate datasets using Harmony to correct batch effects
-seob_harmony <- IntegrateLayers(object = seob,
-                                normalization.method = "SCT",
-                                orig.reduction = "pca",
-                                method = HarmonyIntegration,
-                                new.reduction = "integrated.harmony")
-
-# Run UMAP on integrated data
-seob_harmony <- RunUMAP(seob_harmony, assay = "SCT", dims = 1:30,
-                        reduction = "integrated.harmony")
-
-# Save sample-colored UMAP visualization
-pdf("data/Cgigas/larva/Cgi_UMAP_harmony.pdf", width = 6, height = 6)
-DimPlot(seob_harmony, reduction = "umap", group.by = "samples", label = F)
-dev.off()
-
 # Update object and compute nearest-neighbor graph
-seob <- seob_harmony
-seob <- FindNeighbors(seob, reduction = "integrated.harmony", dims = 1:30)
+DefaultAssay(seob) <- "SCT"
+seob <- FindNeighbors(seob, reduction = "pca", dims = 1:30)
 
 # Explore clustering resolutions (1 to 7)
-resolutions <- seq(1, 7, by=0.5)
+resolutions <- seq(1, 8, by=0.1)
 seob <- FindClusters(seob,
                      resolution = resolutions,
                      random.seed = 1)
@@ -156,10 +137,9 @@ seob <- FindClusters(seob,
 clustree_plot <- clustree(seob, prefix = "SCT_snn_res.")
 ggsave("data/Cgigas/larva/clustree_plot.pdf", plot = clustree_plot, width = 40, height = 20)
 
-# Perform clustering at the optimal resolution (2.0)
-seob <- seob_harmony
-seob <- FindNeighbors(seob, reduction = "integrated.harmony", dims = 1:30)
-seob <- FindClusters(seob, resolution = 2.0, random.seed = 1)
+# Perform clustering at the optimal resolution (6.7)
+seob <- FindNeighbors(seob, reduction = "pca", dims = 1:30)
+seob <- FindClusters(seob, resolution = 6.7, random.seed = 1)
 
 # Plot and save UMAP with cluster labels
 cluster_plot <- DimPlot(seob, reduction = "umap", group.by = "seurat_clusters", label = T)
@@ -227,70 +207,12 @@ seob_singlets <- subset(seob, cells = Singlets)
 
 # Overwrite seob with singlet-only object for downstream analysis
 seob <- seob_singlets
-options(future.globals.maxSize = 10 * 1024^3) 
-seob <- SCTransform(seob)
-seob <- RunPCA(seob, assay = "SCT")
-seob <- RunUMAP(seob, reduction = "pca", dims = 1:30)
 
-# Batch correction across developmental stages
-seob$stages <- ifelse(seob$samples == "T", "Trochophore", "Gastrula")
-seob <- IntegrateLayers(object = seob,
-                        normalization.method = "SCT",
-                        orig.reduction = "pca",
-                        method = HarmonyIntegration,
-                        group.by.vars = "stages",
-                        new.reduction = "integrated.harmony")
-
-# Re-run UMAP on Harmony-integrated data
-seob <- RunUMAP(seob, assay = "SCT", dims = 1:30, reduction = "integrated.harmony")
-
-# Compute neighbors and cluster cells
-seob <- FindNeighbors(seob, reduction = "integrated.harmony", dims = 1:30)
-seob <- FindClusters(seob, resolution = 2.0, random.seed = 1)
-
-# Plot UMAP with custom colors and cluster labels at centroids
-cluster_plot <- DimPlot(seob, reduction = "umap", group.by = "seurat_clusters", label = TRUE) +
-  theme_void(base_size = 12) +
-  theme(legend.position = "na") +
-  ggtitle(NULL)
-
-# Add arrows to indicate UMAP axes
-xrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$x.range
-yrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$y.range
-arrow_base_x <- xrange[1] + 0.1 * diff(xrange)
-arrow_base_y <- yrange[1] + 0.1 * diff(yrange)
-
-# Generate Plot
-cluster_plot <- cluster_plot +
-  annotate("segment",
-           x = arrow_base_x, xend = arrow_base_x + 0.1 * diff(xrange),
-           y = arrow_base_y, yend = arrow_base_y,
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text",
-           x = arrow_base_x + 0.1 * diff(xrange), y = arrow_base_y,
-           label = "UMAP1", hjust = 0, vjust = 1, size = 3.5) +
-  annotate("segment",
-           x = arrow_base_x, xend = arrow_base_x,
-           y = arrow_base_y, yend = arrow_base_y + 0.1 * diff(yrange),
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text",
-           x = arrow_base_x + 0.05 * diff(xrange), y = arrow_base_y + 0.1 * diff(yrange),
-           label = "UMAP2", hjust = 1, vjust = 0, size = 3.5) +
-  coord_fixed(ratio = 1)
-pdf("data/Cgigas/larva/cluster_plot.pdf", width = 15, height = 15)
-print(cluster_plot)
-dev.off()
-
-# Read eggNOG-mapper annotation
-emapper <- read.delim("data/Cgigas/Cgi.pep.emapper_out.annotations", comment.char = "#", header = TRUE, sep = "\t")
-
-# Replace missing "Preferred_name" with query ID
-emapper$Preferred_name[emapper$Preferred_name == "-"] <- NA
-emapper$Preferred_name[is.na(emapper$Preferred_name)] <- emapper$query[is.na(emapper$Preferred_name)]
-
-# Create mapping from geneID to preferred gene name
-gene2name <- unique(emapper[, c("geneID", "Preferred_name")])
-gene_label_map <- setNames(gene2name$Preferred_name, gene2name$geneID)
+# Marker genes identification
+Cg_markers <- FindAllMarkers(seob, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25, assay = "SCT")
+Cg_markers <- Cg_markers %>%
+  arrange(cluster, desc(avg_log2FC))
+write.csv(Cg_markers, file = "data/Cgigas/larva/Cg_cluster_markers.csv", row.names = FALSE)
 
 # Define the list of marker genes
 ordered_genes <- c(
@@ -303,6 +225,33 @@ ordered_genes <- c(
   "LOC105348490", "LOC105335486", "LOC105346273", "LOC105329481", "LOC105335713",
   "LOC105342762", "LOC105323195"
 )
+ordered_genes <- c(
+  "LOC105319624",
+  "LOC105344040",
+  "LOC105340517",
+  "LOC105319410",
+  "LOC105344230",
+  "LOC105344097",
+  "LOC105341857",
+  "LOC105329605",
+  "LOC105324772",
+  "LOC105348917",
+  "LOC105345135",
+  "LOC105322264",
+  "LOC105325470",
+  "LOC105328534",
+  "LOC105320177",
+  "LOC105331920",
+  "LOC105338883",
+  "LOC105338950",
+  "LOC105317061",
+  "LOC105329634",
+  "LOC105348570",
+  "LOC105346273",
+  "LOC105336521",
+  "LOC105329786",
+  "LOC105335486",
+  "LOC105348490")
 
 # Extract expression data for DotPlot
 marker_data <- DotPlot(seob, 
@@ -329,9 +278,7 @@ feature_levels <- sapply(ordered_genes, function(gid) {
 marker_data$features.plot <- factor(marker_data$features.plot, levels = feature_levels)
 
 # Define cluster order for plotting
-cluster_order <- rev(c(76, 19, 30, 36, 15, 34, 27, 73, 29, 32, 41, 68, 83, 85, 33, 40, 44, 50, 52, 53, 54, 61, 77, 8, 12, 14, 16, 18, 21, 25, 
-26, 28, 31, 35, 45, 49, 56, 58, 59, 66, 70, 79, 80, 81, 60, 0, 7, 47, 48, 63, 2, 4, 6, 9, 11, 22, 38, 39, 62, 65, 69, 74, 75, 78, 86, 1, 10, 
-17, 24, 72, 67, 87, 57, 20, 23, 84, 42, 51, 55, 37, 64, 3, 43, 71, 5, 13, 46, 82))
+cluster_order <- rev(c(24,13,27,51,57,28,42,11,49,32,50,43,37,40,41,60,12,15,19,34,39,53,17,22,38,54,4,9,18,36,62,1,3,5,8,14,20,25,26,29,30,31,44,56,59,0,2,6,7,10,16,21,23,33,35,45,46,47,48,52,55,58,61))
 marker_data$id <- factor(marker_data$id, levels = as.character(cluster_order))
 
 # Generate DotPlot using ggplot2
@@ -356,95 +303,69 @@ dev.off()
 
 # Define mapping from cluster ID to cell type
 cluster2type <- c(
-  "0" = "Hemocytes",
-  "1" = "Myocytes",
-  "2" = "Cilia",
-  "3" = "Cilia + Myocytes",
-  "4" = "Cilia",
-  "5" = "Unknown",
-  "6" = "Cilia",
-  "7" = "Hemocytes",
-  "8" = "Proliferative cells",
-  "9" = "Cilia",
-  "10" = "Myocytes",
-  "11" = "Cilia",
-  "12" = "Proliferative cells",
-  "13" = "Unknown",
-  "14" = "Proliferative cells",
-  "15" = "Shell gland1",
-  "16" = "Proliferative cells",
-  "17" = "Myocytes",
-  "18" = "Proliferative cells",
-  "19" = "Shell gland1",
-  "20" = "Proliferative cells + Myocytes",
-  "21" = "Proliferative cells",
-  "22" = "Cilia",
-  "23" = "Proliferative cells + Myocytes",
-  "24" = "Myocytes",
-  "25" = "Proliferative cells",
-  "26" = "Proliferative cells",
+  "24" = "Shell gland1",
+  "13" = "Shell gland2",
   "27" = "Shell gland2",
-  "28" = "Proliferative cells",
-  "29" = "Shell gland3",
-  "30" = "Shell gland1",
-  "31" = "Proliferative cells",
-  "32" = "Shell gland3",
-  "33" = "Shell gland4",
-  "34" = "Shell gland1",
-  "35" = "Proliferative cells",
-  "36" = "Shell gland1",
-  "37" = "Proliferative cells + Myocytes",
-  "38" = "Cilia",
-  "39" = "Cilia",
-  "40" = "Shell gland4",
-  "41" = "Shell gland3",
-  "42" = "Proliferative cells + Myocytes",
-  "43" = "Cilia + Myocytes",
-  "44" = "Shell gland4",
-  "45" = "Proliferative cells",
-  "46" = "Unknown",
-  "47" = "Hemocytes",
-  "48" = "Hemocytes",
+  "51" = "Shell gland3",
+  "57" = "Shell gland3",
+  "28" = "Shell gland4",
+  "42" = "Shell gland4",
+  "11" = "Proliferative cells",
   "49" = "Proliferative cells",
-  "50" = "Shell gland4",
-  "51" = "Proliferative cells + Myocytes",
-  "52" = "Shell gland4",
-  "53" = "Shell gland4",
-  "54" = "Shell gland4",
-  "55" = "Proliferative cells + Myocytes",
-  "56" = "Proliferative cells",
-  "57" = "Hemocytes + Myocytes",
-  "58" = "Proliferative cells",
-  "59" = "Proliferative cells",
-  "60" = "Neurons",
-  "61" = "Shell gland4",
+  "32" = "Proliferative cells",
+  "50" = "Proliferative cells",
+  "43" = "Neurons",
+  "37" = "Hemocytes",
+  "40" = "Hemocytes",
+  "41" = "Hemocytes",
+  "60" = "Hemocytes",
+  "12" = "Hemocytes",
+  "15" = "Hemocytes",
+  "19" = "Hemocytes",
+  "34" = "Hemocytes",
+  "39" = "Hemocytes",
+  "53" = "Hemocytes",
+  "17" = "Hemocytes",
+  "22" = "Hemocytes",
+  "38" = "Hemocytes",
+  "54" = "Hemocytes",
+  "4" = "Cilia",
+  "9" = "Cilia",
+  "18" = "Cilia",
+  "36" = "Cilia",
   "62" = "Cilia",
-  "63" = "Hemocytes",
-  "64" = "Neurons + Myocytes",
-  "65" = "Cilia",
-  "66" = "Proliferative cells",
-  "67" = "Myocytes",
-  "68" = "Shell gland3",
-  "69" = "Cilia",
-  "70" = "Proliferative cells",
-  "71" = "Cilia + Myocytes",
-  "72" = "Myocytes",
-  "73" = "Shell gland2",
-  "74" = "Cilia",
-  "75" = "Cilia",
-  "76" = "Shell gland1",
-  "77" = "Shell gland4",
-  "78" = "Cilia",
-  "79" = "Proliferative cells",
-  "80" = "Proliferative cells",
-  "81" = "Proliferative cells",
-  "82" = "Unknown",
-  "83" = "Shell gland3",
-  "84" = "Proliferative cells + Myocytes",
-  "85" = "Shell gland3",
-  "86" = "Cilia",
-  "87" = "Myocytes"
-)
+  "59" = "Myocytes",
+  "56" = "Myocytes",
+  "44" = "Myocytes",
+  "31" = "Myocytes",
+  "30" = "Myocytes",
+  "29" = "Myocytes",
+  "26" = "Myocytes",
+  "25" = "Myocytes",
+  "20" = "Myocytes",
+  "14" = "Myocytes",
+  "8" = "Myocytes",
+  "5" = "Myocytes",
+  "3" = "Myocytes",
+  "1" = "Myocytes",
+  "0" = "Unknown",
+  "2" = "Unknown",
+  "6" = "Unknown",
+  "7" = "Unknown",
+  "10" = "Unknown",
+  "16" = "Unknown",
+  "21" = "Unknown",
+  "23" = "Unknown",
+  "33" = "Unknown",
+  "35" = "Unknown",
+  "45" = "Unknown",
+  "46" = "Unknown",
+  "47" = "Unknown",
+  "48" = "Unknown",
+  "52" = "Unknown",
+  "55" = "Unknown",
+  "58" = "Unknown",
+  "61" = "Unknown")
 
 # Add cell type annotation to Seurat metadata
 seob@meta.data$cell_type <- cluster2type[as.character(seob@meta.data$seurat_clusters)]
@@ -465,7 +386,7 @@ centroids <- umap_df %>%
 # Define colors for each cell type (no cluster numbers in legend)
 my_colors <- c(
   "Shell gland1" = "#c5362b",
-  "Shell gland2" = "#e55442",
+  "Shell gland2" = "#E86A60",
   "Shell gland3" = "#f08a74",
   "Shell gland4" = "#f5c7b9",
   "Proliferative cells" = "#f6c461",
@@ -473,11 +394,7 @@ my_colors <- c(
   "Hemocytes" = "#36729d",
   "Cilia" = "#9dbb65",
   "Myocytes" = "#72a87a",
-  "Hemocytes + Myocytes" = "#5d998a",
-  "Proliferative cells + Myocytes" = "#529192",
-  "Neurons + Myocytes" = "#4b899b",
-  "Cilia + Myocytes" = "#6cbacc",
-  "Unknown" = "#add3d0"
+  "Unknown" = "#b0d8d5"
 )
 
 # Set factor levels to maintain consistent legend order
@@ -520,12 +437,41 @@ pdf("data/Cgigas/larva/cluster_plot.cell_type.pdf", width = 15, height = 15)
 print(cluster_plot)
 dev.off()
 
-# Marker gene preparation
-Idents(seob) <- "seurat_clusters"
-seob <- PrepSCTFindMarkers(seob)
+
+# Generate DotPlot for cell types
+marker_data <- DotPlot(seob, 
+                       assay = "SCT", 
+                       features = ordered_genes,
+                       group.by = "cell_type")$data
+
+cluster_order <- c("Shell gland1","Shell gland2","Shell gland3", "Shell gland4","Proliferative cells",
+                       "Neurons","Hemocytes","Cilia","Myocytes","Unknown")
+
+marker_data$id <- factor(marker_data$id, levels = as.character(cluster_order))
+
+marker_plot <- ggplot(marker_data, aes(x =id , y = Gene_name)) +
+  geom_point(
+    aes(size = pct.exp, color = avg.exp.scaled)) +
+  scale_color_gradient2(low = "#4575b4", mid = "white", high = "#d73027", midpoint = 0) +
+  scale_size(range = c(1, 8)) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
+                               size = 10, color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 10, color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(size = 10, color = "black"),
+    legend.text = element_text(size = 10, color = "black")
+  )
+
+pdf("data/Cgigas/larva/marker_dotplot.pdf", width = 12, height = 15)
+print(marker_plot)
+dev.off()
 
 # Identify marker genes for each cell type
-Cg_cell_markers <- FindAllMarkers(seob, only.pos = TRUE, group.by = "cell_type", min.pct = 0.10, logfc.threshold = 0.25, assay = "SCT")
+Cg_cell_markers <- FindAllMarkers(seob, only.pos = TRUE, group.by = "cell_type", min.pct = 0.25, logfc.threshold = 0.25, assay = "SCT")
 write.csv(Cg_cell_markers, file = "data/Cgigas/larva/Cg_cell_markers.csv", row.names = FALSE)
 save(Cg_cell_markers, file = "data/Cgigas/larva/Cg_cell_markers.rdata")
 
@@ -533,84 +479,3 @@ save(Cg_cell_markers, file = "data/Cgigas/larva/Cg_cell_markers.rdata")
 Cg_average <- AverageExpression(seob, group.by = "cell_type")$SCT
 Cg_average <- rownames_to_column(as.data.frame(Cg_average), "GeneID")
 save(Cg_average, file = "data/Cgigas/larva/Cg_average.rdata")
-
-# Save the Seurat object
-save(seob, file = "data/Cgigas/larva/OysterLarva.scRNAseq.rdata")
-
-# Select only cells belonging to gastrula
-cells_use <- rownames(seob@meta.data[seob@meta.data$sample %in% c("G1", "G2", "G3", "G4"), ])
-
-# Generate UMAP plot colored by annotated cell types
-cluster_plot <- DimPlot(
-  seob, 
-  reduction = "umap", 
-  group.by = "cell_type_label",
-  label = FALSE, 
-  cols = my_colors, 
-  cells = cells_use) +
-  theme_void(base_size = 12) + 
-  theme(legend.position = "right") + 
-  ggtitle(NULL)
-
-# Add arrows to indicate UMAP axes
-xrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$x.range
-yrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$y.range
-arrow_base_x <- xrange[1] + 0.1 * diff(xrange)
-arrow_base_y <- yrange[1] + 0.1 * diff(yrange)
-
-# Generate Plot for gastrula cells
-cluster_plot <- cluster_plot + 
-  annotate("segment", x = arrow_base_x, xend = arrow_base_x + 0.1 * diff(xrange),
-           y = arrow_base_y, yend = arrow_base_y, 
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text", x = arrow_base_x + 0.1 * diff(xrange), y = arrow_base_y,
-           label = "UMAP1", hjust = 0, vjust = 1, size = 3.5) +
-  annotate("segment", x = arrow_base_x, xend = arrow_base_x,
-           y = arrow_base_y, yend = arrow_base_y + 0.1 * diff(yrange),
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text", x = arrow_base_x + 0.05 * diff(xrange), 
-           y = arrow_base_y + 0.1 * diff(yrange), 
-           label = "UMAP2", hjust = 1, vjust = 0, size = 3.5) +
-  coord_fixed(ratio = 1)
-pdf("data/Cgigas/larva/cluster_plot.gastrula.pdf", width = 15, height = 15)
-print(cluster_plot)
-dev.off()
-
-# Select only cells belonging to trochophore
-cells_use <- rownames(seob@meta.data[seob@meta.data$sample %in% c("T"), ])
-
-# Generate UMAP plot colored by annotated cell types
-cluster_plot <- DimPlot(
-  seob, 
-  reduction = "umap", 
-  group.by = "cell_type_label",
-  label = FALSE, 
-  cols = my_colors, 
-  cells = cells_use) +
-  theme_void(base_size = 12) + 
-  theme(legend.position = "right") + 
-  ggtitle(NULL)
-
-# Add arrows to indicate UMAP axes
-xrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$x.range
-yrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$y.range
-arrow_base_x <- xrange[1] + 0.1 * diff(xrange)
-arrow_base_y <- yrange[1] + 0.1 * diff(yrange)
-
-# Generate Plot for trochophore cells
-cluster_plot <- cluster_plot + 
-  annotate("segment", x = arrow_base_x, xend = arrow_base_x + 0.1 * diff(xrange),
-           y = arrow_base_y, yend = arrow_base_y, 
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text", x = arrow_base_x + 0.1 * diff(xrange), y = arrow_base_y,
-           label = "UMAP1", hjust = 0, vjust = 1, size = 3.5) +
-  annotate("segment", x = arrow_base_x, xend = arrow_base_x,
-           y = arrow_base_y, yend = arrow_base_y + 0.1 * diff(yrange),
-           arrow = arrow(length = unit(0.2, "cm")), size = 0.5) +
-  annotate("text", x = arrow_base_x + 0.05 * diff(xrange), 
-           y = arrow_base_y + 0.1 * diff(yrange), 
-           label = "UMAP2", hjust = 1, vjust = 0, size = 3.5) +
-  coord_fixed(ratio = 1)
-pdf("data/Cgigas/larva/cluster_plot.trochophore.pdf", width = 15, height = 15)
-print(cluster_plot)
-dev.off()
