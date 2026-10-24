@@ -20,7 +20,8 @@ rowData(cds) <- data.frame(
 # Keep only relevant shell-secreting epithelial cells and proliferative cells
 keep_types <- c("Shell-secreting epithelial cells1","Shell-secreting epithelial cells2",
                 "Shell-secreting epithelial cells3","Shell-secreting epithelial cells4",
-                "Shell-secreting epithelial cells5","Proliferative cells")
+                "Shell-secreting epithelial cells5","Shell-secreting epithelial cells6",
+                "Proliferative cells")
 cds <- cds[, colData(cds)$cell_type %in% keep_types]
 
 # Cluster cells in UMAP space
@@ -80,26 +81,3 @@ plot_cells(cds,
            label_branch_points = FALSE,
            label_leaves = FALSE)
 dev.off()
-
-# Extract pseudotime for downstream analysis
-colData(cds)$pseudotime <- monocle3::pseudotime(cds)
-df <- as.data.frame(colData(cds))
-
-# Plot pseudotime density by cell type
-p <- ggplot(df, aes(x = pseudotime, color = cell_type, fill = cell_type)) +
-  geom_density(alpha = 0.3) +  # alpha controls transparency
-  theme_bw() +
-  theme(
-    legend.position = "right",
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 14)
-  ) +
-  xlab("Pseudotime") +
-  ylab("Density") +
-  coord_cartesian(ylim = c(0, 3.1))
-ggsave("pseudotime_density.pdf", p, width = 10, height = 5)
-
-# Test for genes associated with the trajectory graph
-cds_pr_test_res <- graph_test(cds, neighbor_graph="principal_graph", cores=4)
-cds_pr_test_res <- arrange(cds_pr_test_res, desc(morans_test_statistic))
-write.csv(cds_pr_test_res, file = "cds_pr_test_res.csv", row.names = TRUE)
