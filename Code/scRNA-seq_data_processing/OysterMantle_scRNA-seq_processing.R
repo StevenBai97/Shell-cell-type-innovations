@@ -209,28 +209,49 @@ seob_singlets <- subset(seob, cells = Singlets)
 # Overwrite seob with singlet-only object for downstream analysis
 seob <- seob_singlets
 
-# Read eggNOG-mapper annotation
-emapper <- read.delim("data/Cgigas/Cgi.pep.emapper_out.annotations", comment.char = "#", header = TRUE, sep = "\t")
+# Marker genes identification
+Cg_markers <- FindAllMarkers(seob, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25, assay = "SCT")
 
-# Replace missing "Preferred_name" with query ID
-emapper$Preferred_name[emapper$Preferred_name == "-"] <- NA
-emapper$Preferred_name[is.na(emapper$Preferred_name)] <- emapper$query[is.na(emapper$Preferred_name)]
+Cg_markers <- Cg_markers %>%
+  arrange(cluster, desc(avg_log2FC))
 
-# Create mapping from geneID to preferred gene name
-gene2name <- unique(emapper[, c("geneID", "Preferred_name")])
-gene_label_map <- setNames(gene2name$Preferred_name, gene2name$geneID)
+write.csv(Cg_markers, file = "data/Cgigas/mantle/Cg_cluster_markers.csv", row.names = FALSE)
 
 # Define the list of marker genes
 ordered_genes <- c(
-  "LOC105329954", "LOC105335295", "LOC105325156", "LOC105324712", "LOC105344040", "LOC117688780",
-  "LOC105336368", "LOC105336346", "LOC105347390", "Tyr", "LOC105334492", "LOC105326482", 
-  "LOC105324352", "LOC109617045", "LOC105347705", "LOC105335177", "LOC105334556",
-  "LOC105329634", "LOC105348570", "LOC105348490", "LOC105329481", "LOC105335713",
-  "LOC105323195", "LOC105327706", "LOC105343071", "LOC105320177", "LOC105331920",
-  "LOC105338883", "LOC105338950", "LOC105324772"， "LOC105326938", "LOC105328755",
-  "LOC105329247", "LOC105319677", "LOC105323511", "LOC105328903", "LOC105333128",
-  "LOC105337940", "LOC105339039", "LOC105341104"
-)
+  "LOC105325156",
+  "LOC105336368",
+  "LOC105336346",
+  "LOC105347390",
+  "Tyr",
+  "LOC105329954",
+  "LOC105333790",
+  "LOC105334425",
+  "LOC105325054",
+  "LOC105342230",
+  "LOC105346765",
+  "LOC105326482",
+  "LOC105334492",
+  "LOC105324352",
+  "LOC105347705",
+  "LOC105335177",
+  "LOC105325470",
+  "LOC105334556",
+  "LOC105329786",
+  "LOC105317061",
+  "LOC105329634",
+  "LOC105348570",
+  "LOC105348490",
+  "LOC105320177",
+  "LOC105331920",
+  "LOC105338883",
+  "LOC105338950",
+  "LOC105324772",
+  "LOC105348917",
+  "LOC105345135",
+  "LOC105333128",
+  "LOC105336631",
+  "LOC105341104")
 
 # Extract expression data for DotPlot
 marker_data <- DotPlot(seob, 
@@ -257,8 +278,249 @@ feature_levels <- sapply(ordered_genes, function(gid) {
 marker_data$features.plot <- factor(marker_data$features.plot, levels = feature_levels)
 
 # Define cluster order for plotting
-cluster_order <- rev(c(22,18,27,29,33,21,1,10,32,8,17,24,9,25,31,4,7,11,34,5,30,12,14,23,0,2,3,6,13,15,16,19,20,26,28))
+cluster_order <- rev(c(22,18,27,29,33,21,1,10,31,32,34,8,24,9,25,4,7,11,5,30,12,14,23,0,2,3,6,13,15,16,17,19,20,26,28))
 marker_data$id <- factor(marker_data$id, levels = as.character(cluster_order))
+
+# Generate DotPlot using ggplot2
+marker_plot <- ggplot(marker_data, aes(x = features.plot, y = id)) +
+  geom_point(aes(size = pct.exp, color = avg.exp.scaled)) +
+  scale_color_gradient2(low = "#4575b4", mid = "white", high = "#d73027", midpoint = 0) +
+  scale_size(range = c(1, 8)) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
+                               size = 10, color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 10, color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(size = 10, color = "black"),
+    legend.text = element_text(size = 10, color = "black")
+  )
+pdf("data/Cgigas/mantle/marker_dotplot.pdf", width = 12, height = 15)
+print(marker_plot)
+dev.off()
+
+# Generate a UMAP plot colored by Seurat cluster
+cluster_plot <- DimPlot(
+  seob,
+  reduction = "umap",
+  group.by = c("seurat_clusters"),
+  label = TRUE
+) +
+  theme_void(base_size = 12) +
+  theme(legend.position = "none") +
+  ggtitle(NULL)
+
+# Extract the plotting ranges for positioning the UMAP axis arrows
+xrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$x.range
+yrange <- ggplot_build(cluster_plot)$layout$panel_params[[1]]$y.range
+
+# Define the shared origin of the UMAP axis arrows
+arrow_base_x <- xrange[1] + 0.1 * diff(xrange)
+arrow_base_y <- yrange[1] + 0.1 * diff(yrange)
+
+# Add arrows and labels for UMAP1 and UMAP2
+cluster_plot <- cluster_plot +
+  annotate(
+    "segment",
+    x = arrow_base_x,
+    xend = arrow_base_x + 0.1 * diff(xrange),
+    y = arrow_base_y,
+    yend = arrow_base_y,
+    arrow = arrow(length = unit(0.2, "cm")),
+    size = 0.5
+  ) +
+  annotate(
+    "text",
+    x = arrow_base_x + 0.1 * diff(xrange),
+    y = arrow_base_y,
+    label = "UMAP1",
+    hjust = 0,
+    vjust = 1,
+    size = 3.5
+  ) +
+  annotate(
+    "segment",
+    x = arrow_base_x,
+    xend = arrow_base_x,
+    y = arrow_base_y,
+    yend = arrow_base_y + 0.1 * diff(yrange),
+    arrow = arrow(length = unit(0.2, "cm")),
+    size = 0.5
+  ) +
+  annotate(
+    "text",
+    x = arrow_base_x + 0.05 * diff(xrange),
+    y = arrow_base_y + 0.1 * diff(yrange),
+    label = "UMAP2",
+    hjust = 1,
+    vjust = 0,
+    size = 3.5
+  ) +
+  coord_fixed(ratio = 1)
+pdf("data/Cgigas/mantle/cluster_plot.pdf", width = 12, height = 15)
+print(cluster_plot)
+dev.off()
+
+# Visualize the distributions of QC metrics across clusters
+VlnPlot(seob, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), group.by = "seurat_clusters", pt.size = 0)
+
+# Extract cluster assignments and QC metrics from the metadata
+qc_data <- seob@meta.data %>%
+  select(
+    seurat_clusters,
+    nFeature_RNA,
+    nCount_RNA,
+    percent.mt
+  )
+
+# Get all cluster labels
+clusters <- sort(unique(qc_data$seurat_clusters))
+
+# Define the QC metrics to compare
+features <- c(
+  "nFeature_RNA",
+  "nCount_RNA",
+  "percent.mt"
+)
+
+# Initialize a list to store the comparison results
+results <- list()
+
+# Compare each cluster with all remaining clusters pooled together
+for (cl in clusters) {
+
+  # Select cells belonging to the current cluster
+  group1 <- qc_data %>%
+    filter(seurat_clusters == cl)
+
+  # Select cells belonging to all other clusters
+  group2 <- qc_data %>%
+    filter(seurat_clusters != cl)
+
+  for (feature in features) {
+
+    # Extract values for the current QC metric
+    x <- group1[[feature]]
+    y <- group2[[feature]]
+
+    # Perform a two-sided Wilcoxon rank-sum test
+    test <- wilcox.test(
+      x,
+      y,
+      alternative = "two.sided"
+    )
+
+    # Calculate median values, excluding missing values
+    median_cluster <- median(x, na.rm = TRUE)
+    median_other <- median(y, na.rm = TRUE)
+
+    # Calculate mean values, excluding missing values
+    mean_cluster <- mean(x, na.rm = TRUE)
+    mean_other <- mean(y, na.rm = TRUE)
+
+    # Calculate cluster-to-other ratios of medians and means
+    FC_median <- median_cluster / median_other
+    FC_mean <- mean_cluster / mean_other
+
+    # Store group sizes, summary statistics, ratios, and the P value
+    results[[length(results) + 1]] <- data.frame(
+      cluster = cl,
+      feature = feature,
+      n_cluster = length(x),
+      n_other = length(y),
+      median_cluster = median_cluster,
+      median_other = median_other,
+      FC_median = FC_median,
+      mean_cluster = mean_cluster,
+      mean_other = mean_other,
+      FC_mean = FC_mean,
+      p_value = test$p.value
+    )
+  }
+}
+
+# Combine all comparisons into a single data frame
+qc_results <- bind_rows(results)
+
+# Apply Benjamini–Hochberg correction across clusters within each QC metric
+qc_results <- qc_results %>%
+  group_by(feature) %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "BH")
+  ) %>%
+  ungroup()
+
+# Sort the results by QC metric and cluster
+qc_results <- qc_results %>%
+  arrange(feature, cluster)
+
+# Export the cluster-level QC comparison results
+write.csv(
+  qc_results,
+  file = "data/Cgigas/mantle/cluster_qc_results.csv",
+  row.names = FALSE
+)
+
+# Create a filtered object from seob_singlets by excluding clusters 31 and 34
+seob <- subset(
+  seob_singlets,
+  subset = seurat_clusters != "31" &
+    seurat_clusters != "34"
+)
+
+# Remove unused factor levels from the cluster metadata
+seob$seurat_clusters <- droplevels(seob$seurat_clusters)
+
+# Check the number of cells remaining in each cluster
+table(seob$seurat_clusters)
+
+# Identify positive markers for each active identity using the SCT assay
+Cg_markers <- FindAllMarkers(seob, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25, assay = "SCT")
+
+# Sort markers by cluster and decreasing average log2 fold change
+Cg_markers <- Cg_markers %>%
+  arrange(cluster, desc(avg_log2FC))
+
+# Export the marker gene results
+write.csv(Cg_markers, file = "data/Cgigas/mantle/Cg_cluster_markers.csv", row.names = FALSE)
+
+# Extract expression statistics for the selected genes from Seurat DotPlot
+marker_data <- DotPlot(
+  seob,
+  assay = "SCT",
+  features = ordered_genes,
+  group.by = "seurat_clusters"
+)$data
+
+# Retain gene–cluster combinations with expression in at least one cell
+marker_data <- marker_data[
+  marker_data$pct.exp > 0,
+]
+
+# Map gene IDs to gene names using the named vector gene_map
+marker_data$Gene_name <- gene_map[
+  as.character(marker_data$features.plot)
+]
+
+# Define the gene-name order based on the ordered gene IDs
+ordered_gene_names <- gene_map[ordered_genes]
+
+# Set factor levels to control the order of genes on the x-axis
+marker_data$Gene_name <- factor(
+  marker_data$Gene_name,
+  levels = ordered_gene_names
+)
+
+# Define cluster factor levels so the specified sequence appears top to bottom
+cluster_order <- rev(c(22,18,27,29,33,21,1,10,32,8,24,9,25,4,7,11,5,30,12,14,23,0,2,3,6,13,15,16,17,19,20,26,28))
+
+# Apply the cluster order to the y-axis
+marker_data$id <- factor(
+  marker_data$id,
+  levels = as.character(cluster_order)
+)
 
 # Generate DotPlot using ggplot2
 marker_plot <- ggplot(marker_data, aes(x = features.plot, y = id)) +
@@ -299,11 +561,11 @@ cluster2type <- c(
   "14" = "Vesicular connective tissue cells",
   "15" = "Unknown",
   "16" = "Unknown",
-  "17" = "Hemocytes (blast-like cells)",
+  "17" = "Unknown",
   "18" = "Shell-secreting epithelial cells2",
   "19" = "Unknown",
   "20" = "Unknown",
-  "21" = "Shell-secreting epithelial cells5",
+  "21" = "Shell-secreting epithelial cells6",
   "22" = "Shell-secreting epithelial cells1",
   "23" = "Proliferative cells",
   "24" = "Hemocytes (blast-like cells)",
@@ -311,13 +573,10 @@ cluster2type <- c(
   "26" = "Unknown",
   "27" = "Shell-secreting epithelial cells3",
   "28" = "Unknown",
-  "29" = "Shell-secreting epithelial cells3",
+  "29" = "Shell-secreting epithelial cells4",
   "30" = "Cilia",
-  "31" = "Myocytes + Hemocytes",
   "32" = "Hemocytes (small granule cells)",
-  "33" = "Shell-secreting epithelial cells4",
-  "34" = "Cilia + Hemocytes"
-)
+  "33" = "Shell-secreting epithelial cells5")
 
 # Add cell type annotation to Seurat metadata
 seob@meta.data$cell_type <- cluster2type[as.character(seob@meta.data$seurat_clusters)]
@@ -344,19 +603,17 @@ my_colors <- c(
   "Shell-secreting epithelial cells3" = "#E86A60",
   "Shell-secreting epithelial cells4" = "#f08a74",
   "Shell-secreting epithelial cells5" = "#F2A19A",
+  "Shell-secreting epithelial cells6" = "#ffe5db",
   "Hemocytes (small granule cells)" = "#357daf",
   "Hemocytes (blast-like cells)" = "#4185a8",
   "Hemocytes (hyalinocytes)" = "#4c8ea1",
   "Hemocytes (vesicular cells)" = "#549697",
-  "Myocytes + Hemocytes" = "#5f9e8e",
   "Myocytes" = "#75ad7d",
-  "Cilia + Hemocytes" = "#8dc05a",
   "Cilia" = "#a6c966",
   "Neurons" = "#d3cb5d",
   "Vesicular connective tissue cells" = "#e9ca5d",
   "Proliferative cells" = "#FFC961",
-  "Unknown" = "#b0d8d5"
-)
+  "Unknown" = "#b0d8d5")
 
 # Set factor levels to maintain consistent legend order
 seob@meta.data$cell_type_label <- factor(seob@meta.data$cell_type_label, levels = names(my_colors))
@@ -418,8 +675,36 @@ pdf("data/Cgigas/mantle/cluster_plot.pdf", width = 15, height = 15)
 print(cluster_plot)
 dev.off()
 
+# Define the genes to visualize
+genes <- c("LOC105329954", "BMPER", "LOC105334425", "LOC105325054", "LOC105342230", "LOC105346765")
+
+# Plot gene expression, drawing cells with higher expression on top
+plots_list <- FeaturePlot(
+  seob,
+  features = genes,
+  order = TRUE
+) &
+  # Apply a gray–orange–red expression gradient to all panels
+  scale_color_gradientn(
+    colors = c("#E0E0E0", "#FDB863", "#bc0d16"),
+    values = c(0, 0.7, 1)
+  ) &
+  # Remove axes, grid lines, and panel backgrounds
+  theme_void() &
+  # Use equal scaling for the x- and y-axes
+  coord_fixed(ratio = 1) &
+  # Set the tick line width for the color bar
+  guides(
+    color = guide_colorbar(
+      ticks.linewidth = 1
+    )
+  )
+pdf("data/Cgigas/mantle/plots_list.pdf")
+print(plots_list)
+dev.off()
+
 # Identify marker genes for each cell type
-Cg_cell_markers <- FindAllMarkers(seob, only.pos = TRUE, group.by = "cell_type", min.pct = 0.10, logfc.threshold = 0.25, assay = "SCT")
+Cg_cell_markers <- FindAllMarkers(seob, only.pos = TRUE, group.by = "cell_type", min.pct = 0.25, logfc.threshold = 0.25, assay = "SCT")
 write.csv(Cg_cell_markers, file = "data/Cgigas/mantle/Cg_cell_markers.csv", row.names = FALSE)
 save(Cg_cell_markers, file = "data/Cgigas/mantle/Cg_cell_markers.rdata")
 
