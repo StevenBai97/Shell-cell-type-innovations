@@ -253,6 +253,31 @@ ordered_genes <- c(
   "LOC105336631",
   "LOC105341104")
 
+# Map Gene_name to Gene_ID
+gene_annotation <- read.delim(
+  "data/Cgigas/mantle/Mantle.name-ID",
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+
+gene_map <- setNames(
+  gene_annotation$Gene_name,
+  gene_annotation$Gene_ID
+)
+
+missing_genes <- setdiff(
+  ordered_genes,
+  gene_annotation$Gene_ID
+)
+
+if (length(missing_genes) > 0) {
+  warning(
+    paste(missing_genes, collapse = ", ")
+  )
+}
+
 # Extract expression data for DotPlot
 marker_data <- DotPlot(seob, 
                    assay = "SCT", 
