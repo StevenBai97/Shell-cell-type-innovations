@@ -243,6 +243,31 @@ ordered_genes <- c(
   "LOC105335486",
   "LOC105348490")
 
+# Map Gene_name to Gene_ID
+gene_annotation <- read.delim(
+  "data/Cgigas/larva/Larva.name-ID",
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+
+gene_map <- setNames(
+  gene_annotation$Gene_name,
+  gene_annotation$Gene_ID
+)
+
+missing_genes <- setdiff(
+  ordered_genes,
+  gene_annotation$Gene_ID
+)
+
+if (length(missing_genes) > 0) {
+  warning(
+    paste(missing_genes, collapse = ", ")
+  )
+}
+
 # Extract expression data for DotPlot
 marker_data <- DotPlot(seob, 
                    assay = "SCT", 
@@ -272,7 +297,7 @@ cluster_order <- rev(c(24,13,27,51,57,28,42,11,49,32,50,43,37,40,41,60,12,15,19,
 marker_data$id <- factor(marker_data$id, levels = as.character(cluster_order))
 
 # Generate DotPlot using ggplot2
-marker_plot <- ggplot(marker_data, aes(x = features.plot, y = id)) +
+marker_plot <- ggplot(marker_data, aes(x = Gene_name, y = id)) +
   geom_point(aes(size = pct.exp, color = avg.exp.scaled)) +
   scale_color_gradient2(low = "#4575b4", mid = "white", high = "#d73027", midpoint = 0) +
   scale_size(range = c(1, 8)) +
@@ -439,7 +464,7 @@ cluster_order <- c("Shell gland1","Shell gland2","Shell gland3", "Shell gland4",
 
 marker_data$id <- factor(marker_data$id, levels = as.character(cluster_order))
 
-marker_plot <- ggplot(marker_data, aes(x =id , y = Gene_name)) +
+marker_plot <- ggplot(marker_data, aes(x = id , y = Gene_name)) +
   geom_point(
     aes(size = pct.exp, color = avg.exp.scaled)) +
   scale_color_gradient2(low = "#4575b4", mid = "white", high = "#d73027", midpoint = 0) +
